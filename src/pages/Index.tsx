@@ -23,8 +23,8 @@ const Index = () => {
 
   const [fps, setFps] = useState(0);
   const [attractMode, setAttractMode] = useState(true);
-  const [forceStrength, setForceStrength] = useState(5.0);
-  const [influenceRadius, setInfluenceRadius] = useState(2.5);
+  const [forceStrength, setForceStrength] = useState(8.0);
+  const [influenceRadius, setInfluenceRadius] = useState(4.0);
   const [isPinching, setIsPinching] = useState(false);
 
   const {

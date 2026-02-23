@@ -28,7 +28,7 @@ export function useHandTracking() {
   const lastVideoTimeRef = useRef(-1);
   // Smoothed position for reducing jitter (exponential moving average)
   const smoothedPos = useRef<{ x: number; y: number } | null>(null);
-  const SMOOTHING = 0.35; // 0 = no smoothing, higher = more smooth (0-1 range, applied as lerp toward raw)
+  const SMOOTHING = 0.15; // 0 = no smoothing, higher = more smooth (0-1 range, applied as lerp toward raw)
 
   const startCamera = useCallback(async () => {
     setIsLoading(true);
