@@ -2,95 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 228 35% 5%;
+    --foreground: 200 20% 92%;
+    --card: 228 28% 9%;
+    --card-foreground: 200 20% 92%;
+    --popover: 228 28% 9%;
+    --popover-foreground: 200 20% 92%;
+    --primary: 187 100% 45%;
+    --primary-foreground: 228 35% 5%;
+    --secondary: 225 20% 14%;
+    --secondary-foreground: 200 20% 85%;
+    --muted: 225 15% 18%;
+    --muted-foreground: 215 12% 55%;
+    --accent: 225 20% 14%;
+    --accent-foreground: 200 20% 92%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 200 20% 95%;
+    --border: 225 15% 16%;
+    --input: 225 15% 16%;
+    --ring: 187 100% 45%;
+    --radius: 0.75rem;
+    --sidebar-background: 228 28% 7%;
+    --sidebar-foreground: 200 20% 85%;
+    --sidebar-primary: 187 100% 45%;
+    --sidebar-primary-foreground: 228 35% 5%;
+    --sidebar-accent: 225 20% 14%;
+    --sidebar-accent-foreground: 200 20% 85%;
+    --sidebar-border: 225 15% 16%;
+    --sidebar-ring: 187 100% 45%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --glow-primary: 187 100% 45%;
+    --glow-secondary: 220 80% 60%;
   }
 
+  /* Dark theme IS the default — no light mode needed */
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --background: 228 35% 5%;
+    --foreground: 200 20% 92%;
+    --card: 228 28% 9%;
+    --card-foreground: 200 20% 92%;
+    --popover: 228 28% 9%;
+    --popover-foreground: 200 20% 92%;
+    --primary: 187 100% 45%;
+    --primary-foreground: 228 35% 5%;
+    --secondary: 225 20% 14%;
+    --secondary-foreground: 200 20% 85%;
+    --muted: 225 15% 18%;
+    --muted-foreground: 215 12% 55%;
+    --accent: 225 20% 14%;
+    --accent-foreground: 200 20% 92%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 200 20% 95%;
+    --border: 225 15% 16%;
+    --input: 225 15% 16%;
+    --ring: 187 100% 45%;
   }
 }
 
@@ -98,8 +65,87 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply backdrop-blur-xl rounded-2xl;
+    background: hsl(var(--card) / 0.65);
+    border: 1px solid hsl(var(--border) / 0.4);
+    box-shadow: 0 8px 32px hsl(var(--background) / 0.6),
+                inset 0 1px 0 hsl(var(--foreground) / 0.05);
+  }
+
+  .glow-button {
+    @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 cursor-pointer;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    box-shadow: 0 0 20px hsl(var(--glow-primary) / 0.35),
+                0 0 60px hsl(var(--glow-primary) / 0.1);
+  }
+  .glow-button:hover {
+    box-shadow: 0 0 30px hsl(var(--glow-primary) / 0.5),
+                0 0 80px hsl(var(--glow-primary) / 0.15);
+    transform: translateY(-1px);
+  }
+  .glow-button:active {
+    transform: translateY(0);
+  }
+  .glow-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .glow-button-outline {
+    @apply px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 cursor-pointer;
+    background: transparent;
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.4);
+  }
+  .glow-button-outline:hover {
+    background: hsl(var(--primary) / 0.1);
+    border-color: hsl(var(--primary) / 0.7);
+  }
+
+  .stat-badge {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs;
+    font-family: 'JetBrains Mono', monospace;
+    background: hsl(var(--card) / 0.7);
+    border: 1px solid hsl(var(--border) / 0.3);
+    color: hsl(var(--muted-foreground));
+  }
+  .stat-badge .stat-value {
+    color: hsl(var(--primary));
+    font-weight: 500;
+  }
+
+  .control-label {
+    @apply text-xs font-medium tracking-wide uppercase;
+    color: hsl(var(--muted-foreground));
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .slider-track {
+    @apply relative w-full h-1.5 rounded-full cursor-pointer;
+    background: hsl(var(--muted));
+  }
+  .slider-track::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 rounded-full;
+    background: hsl(var(--primary));
+    box-shadow: 0 0 10px hsl(var(--glow-primary) / 0.5);
+    cursor: pointer;
+  }
+
+  .error-banner {
+    @apply px-6 py-4 rounded-2xl text-center;
+    background: hsl(var(--destructive) / 0.15);
+    border: 1px solid hsl(var(--destructive) / 0.3);
+    color: hsl(var(--destructive-foreground));
   }
 }
