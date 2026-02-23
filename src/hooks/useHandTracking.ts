@@ -26,6 +26,9 @@ export function useHandTracking() {
   const handLandmarkerRef = useRef<any>(null);
   const handDataRef = useRef<HandData>({ indexTip: null, isPinching: false });
   const lastVideoTimeRef = useRef(-1);
+  // Smoothed position for reducing jitter (exponential moving average)
+  const smoothedPos = useRef<{ x: number; y: number } | null>(null);
+  const SMOOTHING = 0.35; // 0 = no smoothing, higher = more smooth (0-1 range, applied as lerp toward raw)
 
   const startCamera = useCallback(async () => {
     setIsLoading(true);
@@ -46,7 +49,10 @@ export function useHandTracking() {
           delegate: 'GPU',
         },
         runningMode: 'VIDEO',
-        numHands: 2,
+        numHands: 1,
+        minHandDetectionConfidence: 0.6,
+        minHandPresenceConfidence: 0.6,
+        minTrackingConfidence: 0.6,
       });
 
       handLandmarkerRef.current = handLandmarker;
@@ -88,6 +94,7 @@ export function useHandTracking() {
       handLandmarkerRef.current = null;
     }
     handDataRef.current = { indexTip: null, isPinching: false };
+    smoothedPos.current = null;
     lastVideoTimeRef.current = -1;
     setIsTracking(false);
   }, []);
@@ -119,13 +126,24 @@ export function useHandTracking() {
           (thumbTip.y - indexTip.y) ** 2
         );
 
+        // Apply exponential moving average for smooth tracking
+        const rawX = 1 - indexTip.x; // Mirror x for selfie view
+        const rawY = indexTip.y;
+
+        if (smoothedPos.current) {
+          smoothedPos.current.x += (rawX - smoothedPos.current.x) * (1 - SMOOTHING);
+          smoothedPos.current.y += (rawY - smoothedPos.current.y) * (1 - SMOOTHING);
+        } else {
+          smoothedPos.current = { x: rawX, y: rawY };
+        }
+
         handDataRef.current = {
-          // Mirror x for selfie view
-          indexTip: { x: 1 - indexTip.x, y: indexTip.y },
+          indexTip: { x: smoothedPos.current.x, y: smoothedPos.current.y },
           isPinching: pinchDist < 0.06,
         };
       } else {
         handDataRef.current = { indexTip: null, isPinching: false };
+        smoothedPos.current = null;
       }
     } catch {
       // Detection can occasionally fail on frame boundaries, just skip
