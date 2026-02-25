@@ -210,5 +210,3 @@ MIT (recommended for open demos)
 
 Proprietary (if you want to keep it private)
 
-
-If you paste your actual folder/file names from Lovable, I can rewrite this README to match your exact structure (commands, env vars, scripts, etc.).
