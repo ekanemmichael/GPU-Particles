@@ -16,7 +16,8 @@ import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRe
 import type { GPUComputeVariable } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
 
 // 144 * 144 = 20,736 particles
-const WIDTH = 144;
+// 224 * 224 = 50,176 particles
+const WIDTH = 224;
 const PARTICLE_COUNT = WIDTH * WIDTH;
 
 // ─── Simplex noise + curl noise for organic motion ───
