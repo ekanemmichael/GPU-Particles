@@ -22,9 +22,9 @@ const Index = () => {
   const lastFpsTimeRef = useRef(performance.now());
 
   const [fps, setFps] = useState(0);
-  const [forceStrength, setForceStrength] = useState(8.0);
-  const [influenceRadius, setInfluenceRadius] = useState(4.0);
-  const [springStiffness, setSpringStiffness] = useState(6.0);
+  const [forceStrength, setForceStrength] = useState(16.0);
+  const [influenceRadius, setInfluenceRadius] = useState(7.0);
+  const [springStiffness, setSpringStiffness] = useState(2.5);
   const [gestures, setGestures] = useState<HandGesture[]>([]);
   const [handCount, setHandCount] = useState(0);
 
@@ -95,18 +95,18 @@ const Index = () => {
     const detected = handsDataRef.current.hands;
 
     const hands: Hand2D[] = detected.map(h => {
-      let strengthMult = 1;
-      let radiusMult = 1;
+      let strengthMult = 1.4;   // even idle palm tugs noticeably
+      let radiusMult = 1.1;
       let attract = true;
       switch (h.gesture) {
         case 'fist':
-          strengthMult = 2.5;
-          radiusMult = 0.65;
+          strengthMult = 3.2;
+          radiusMult = 0.7;
           attract = true;
           break;
         case 'open':
-          strengthMult = 1.6;
-          radiusMult = 1.4;
+          strengthMult = 2.2;
+          radiusMult = 1.5;
           attract = false;
           break;
       }
