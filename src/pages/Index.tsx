@@ -22,9 +22,9 @@ const Index = () => {
   const lastFpsTimeRef = useRef(performance.now());
 
   const [fps, setFps] = useState(0);
-  const [forceStrength, setForceStrength] = useState(8.0);
-  const [influenceRadius, setInfluenceRadius] = useState(4.0);
-  const [springStiffness, setSpringStiffness] = useState(6.0);
+  const [forceStrength, setForceStrength] = useState(16.0);
+  const [influenceRadius, setInfluenceRadius] = useState(7.0);
+  const [springStiffness, setSpringStiffness] = useState(2.5);
   const [gestures, setGestures] = useState<HandGesture[]>([]);
   const [handCount, setHandCount] = useState(0);
 
