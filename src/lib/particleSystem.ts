@@ -251,12 +251,13 @@ export class ParticleSystem {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: false,
-      alpha: false,
+      alpha: true,
+      premultipliedAlpha: false,
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    // Dark background matching design system --background: 228 35% 5%
-    this.renderer.setClearColor(new THREE.Color('hsl(228, 35%, 5%)'), 1);
+    // Transparent clear so webcam / page background shows through
+    this.renderer.setClearColor(new THREE.Color(0x000000), 0);
 
     this.scene = new THREE.Scene();
 

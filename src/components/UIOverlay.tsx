@@ -1,6 +1,7 @@
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Hand, RotateCcw, Video, VideoOff, Loader2 } from 'lucide-react';
+import { Hand, RotateCcw, Video, VideoOff, Loader2, Grab, Sparkles } from 'lucide-react';
+import type { HandGesture } from '@/hooks/useHandTracking';
 
 interface UIOverlayProps {
   isTracking: boolean;
@@ -11,7 +12,7 @@ interface UIOverlayProps {
   attractMode: boolean;
   forceStrength: number;
   influenceRadius: number;
-  isPinching: boolean;
+  gesture: HandGesture;
   onStartCamera: () => void;
   onStopCamera: () => void;
   onToggleMode: (attract: boolean) => void;
@@ -20,6 +21,13 @@ interface UIOverlayProps {
   onReset: () => void;
   onRetryCamera: () => void;
 }
+
+const GESTURE_META: Record<HandGesture, { label: string; icon: typeof Hand } | null> = {
+  none: null,
+  pinch: { label: 'Pinch', icon: Hand },
+  fist: { label: 'Squeeze', icon: Grab },
+  open: { label: 'Scatter', icon: Sparkles },
+};
 
 export default function UIOverlay({
   isTracking,
@@ -30,7 +38,7 @@ export default function UIOverlay({
   attractMode,
   forceStrength,
   influenceRadius,
-  isPinching,
+  gesture,
   onStartCamera,
   onStopCamera,
   onToggleMode,
@@ -39,6 +47,8 @@ export default function UIOverlay({
   onReset,
   onRetryCamera,
 }: UIOverlayProps) {
+  const gestureInfo = GESTURE_META[gesture];
+  const GestureIcon = gestureInfo?.icon;
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
       {/* ── Top bar: stats ── */}
@@ -49,10 +59,10 @@ export default function UIOverlay({
         <div className="stat-badge">
           Particles <span className="stat-value">{particleCount.toLocaleString()}</span>
         </div>
-        {isPinching && (
+        {gestureInfo && GestureIcon && (
           <div className="stat-badge">
-            <Hand className="w-3 h-3" />
-            <span className="stat-value">Pinch</span>
+            <GestureIcon className="w-3 h-3" />
+            <span className="stat-value">{gestureInfo.label}</span>
           </div>
         )}
       </div>
