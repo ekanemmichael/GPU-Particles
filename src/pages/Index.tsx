@@ -1,37 +1,38 @@
 /**
- * Main page: wires together the GPU particle system, hand tracking, and UI overlay.
+ * Main page: neural-network visualization driven by two-hand tracking.
  *
- * Gestures:
- *  - Pointing: index finger tip drives the attraction point
- *  - Pinch: strong focused pull (grab)
- *  - Fist: strong attract + tight radius (squeeze / gather)
- *  - Open palm: repel / scatter
+ * Each detected palm becomes a soft attractor that bends the network.
+ *  - default (loose hand): gentle pull
+ *  - fist: strong squeeze (tighter radius, stronger force)
+ *  - open palm: repel / scatter
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ParticleSystem } from '@/lib/particleSystem';
+import { NeuralNetwork, type Hand2D } from '@/lib/neuralNetwork';
 import { useHandTracking, type HandGesture } from '@/hooks/useHandTracking';
 import UIOverlay from '@/components/UIOverlay';
 
 const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoElRef = useRef<HTMLVideoElement>(null);
-  const particleRef = useRef<ParticleSystem | null>(null);
+  const netRef = useRef<NeuralNetwork | null>(null);
   const rafRef = useRef(0);
+  const lastTimeRef = useRef(performance.now());
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(performance.now());
 
   const [fps, setFps] = useState(0);
-  const [attractMode, setAttractMode] = useState(true);
   const [forceStrength, setForceStrength] = useState(8.0);
   const [influenceRadius, setInfluenceRadius] = useState(4.0);
-  const [gesture, setGesture] = useState<HandGesture>('none');
+  const [springStiffness, setSpringStiffness] = useState(6.0);
+  const [gestures, setGestures] = useState<HandGesture[]>([]);
+  const [handCount, setHandCount] = useState(0);
 
   const {
     isTracking,
     isLoading,
     cameraError,
-    handDataRef,
+    handsDataRef,
     videoRef,
     videoReady,
     startCamera,
@@ -40,7 +41,7 @@ const Index = () => {
     setCameraError,
   } = useHandTracking();
 
-  // Attach the MediaStream from the hook's hidden video to the visible <video> element
+  // Mirror MediaStream onto the visible <video> element
   useEffect(() => {
     const src = videoRef.current?.srcObject as MediaStream | null;
     if (videoElRef.current && src) {
@@ -51,102 +52,89 @@ const Index = () => {
     }
   }, [videoReady, videoRef]);
 
-  // Store current values in refs for animation loop (avoids stale closures)
-  const attractRef = useRef(attractMode);
+  // Refs for animation loop (avoid stale closures)
   const forceRef = useRef(forceStrength);
   const radiusRef = useRef(influenceRadius);
-  useEffect(() => { attractRef.current = attractMode; }, [attractMode]);
+  const springRef = useRef(springStiffness);
   useEffect(() => { forceRef.current = forceStrength; }, [forceStrength]);
   useEffect(() => { radiusRef.current = influenceRadius; }, [influenceRadius]);
+  useEffect(() => { springRef.current = springStiffness; }, [springStiffness]);
 
-  // Initialize particle system
+  // Init network
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const net = new NeuralNetwork(canvas);
+    netRef.current = net;
 
-    const ps = new ParticleSystem(canvas);
-    particleRef.current = ps;
-
-    const onResize = () => {
-      ps.resize(window.innerWidth, window.innerHeight);
-    };
+    const onResize = () => net.resize(window.innerWidth, window.innerHeight);
     window.addEventListener('resize', onResize);
     onResize();
 
     return () => {
       window.removeEventListener('resize', onResize);
       cancelAnimationFrame(rafRef.current);
-      ps.dispose();
-      particleRef.current = null;
+      net.dispose();
+      netRef.current = null;
     };
   }, []);
 
   // Animation loop
   const animate = useCallback(() => {
     rafRef.current = requestAnimationFrame(animate);
-
-    const ps = particleRef.current;
-    if (!ps) return;
+    const net = netRef.current;
+    if (!net) return;
 
     detect();
 
-    const hand = handDataRef.current;
-    if (hand.indexTip) {
-      const bounds = ps.getWorldBounds();
-      const worldX = hand.indexTip.x * (bounds.right - bounds.left) + bounds.left;
-      const worldY = (1 - hand.indexTip.y) * (bounds.top - bounds.bottom) + bounds.bottom;
-      ps.setHandPosition(worldX, worldY, true);
+    const now = performance.now();
+    const dt = Math.min((now - lastTimeRef.current) / 1000, 0.05);
+    lastTimeRef.current = now;
 
-      // Map gesture → physics
-      // Base values come from sliders; gesture modulates them
-      let forceMult = 1.0;
-      let radiusMult = 1.0;
-      let attract = attractRef.current;
+    const bounds = net.getWorldBounds();
+    const detected = handsDataRef.current.hands;
 
-      switch (hand.gesture) {
-        case 'pinch':
-          forceMult = 3.0;
-          radiusMult = 0.7;
-          attract = true;
-          break;
+    const hands: Hand2D[] = detected.map(h => {
+      let strengthMult = 1;
+      let radiusMult = 1;
+      let attract = true;
+      switch (h.gesture) {
         case 'fist':
-          // Squeeze — strong pull into a tight area
-          forceMult = 4.0;
-          radiusMult = 0.55;
+          strengthMult = 2.5;
+          radiusMult = 0.65;
           attract = true;
           break;
         case 'open':
-          // Scatter — push particles away
-          forceMult = 2.2;
+          strengthMult = 1.6;
           radiusMult = 1.4;
           attract = false;
           break;
-        default:
-          break;
       }
+      return {
+        x: h.palm.x * (bounds.right - bounds.left) + bounds.left,
+        y: (1 - h.palm.y) * (bounds.top - bounds.bottom) + bounds.bottom,
+        active: true,
+        strength: forceRef.current * strengthMult,
+        radius: radiusRef.current * radiusMult,
+        attract,
+      };
+    });
 
-      ps.setForceStrength(forceRef.current * forceMult);
-      ps.setInfluenceRadius(radiusRef.current * radiusMult);
-      ps.setAttractMode(attract);
-      setGesture(hand.gesture);
-    } else {
-      ps.setHandPosition(999, 999, false);
-      ps.setForceStrength(forceRef.current);
-      ps.setInfluenceRadius(radiusRef.current);
-      ps.setAttractMode(attractRef.current);
-      setGesture('none');
-    }
+    net.springStiffness = springRef.current;
+    net.update(dt, hands, now / 1000);
 
-    ps.update();
+    // Sync UI state once per render
+    setGestures(detected.map(h => h.gesture));
+    setHandCount(detected.length);
 
+    // FPS
     frameCountRef.current++;
-    const now = performance.now();
     if (now - lastFpsTimeRef.current >= 1000) {
       setFps(frameCountRef.current);
       frameCountRef.current = 0;
       lastFpsTimeRef.current = now;
     }
-  }, [detect, handDataRef]);
+  }, [detect, handsDataRef]);
 
   useEffect(() => {
     rafRef.current = requestAnimationFrame(animate);
@@ -159,12 +147,12 @@ const Index = () => {
   }, [setCameraError, startCamera]);
 
   const handleReset = useCallback(() => {
-    particleRef.current?.resetParticles();
+    netRef.current?.reset();
   }, []);
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-background">
-      {/* Webcam background — mirrored, dimmed for contrast */}
+      {/* Webcam background */}
       <video
         ref={videoElRef}
         autoPlay
@@ -178,7 +166,7 @@ const Index = () => {
           transition: 'opacity 400ms ease',
         }}
       />
-      {/* Dark vignette so particles stay readable */}
+      {/* Vignette */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -187,25 +175,25 @@ const Index = () => {
         }}
       />
 
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full"
-      />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
+
       <UIOverlay
         isTracking={isTracking}
         isLoading={isLoading}
         cameraError={cameraError}
         fps={fps}
-        particleCount={particleRef.current?.particleCount ?? 50176}
-        attractMode={attractMode}
+        nodeCount={netRef.current?.nodeCount ?? 0}
+        edgeCount={netRef.current?.edgeCount ?? 0}
+        handCount={handCount}
+        gestures={gestures}
         forceStrength={forceStrength}
         influenceRadius={influenceRadius}
-        gesture={gesture}
+        springStiffness={springStiffness}
         onStartCamera={startCamera}
         onStopCamera={stopCamera}
-        onToggleMode={setAttractMode}
         onForceStrengthChange={setForceStrength}
         onInfluenceRadiusChange={setInfluenceRadius}
+        onSpringChange={setSpringStiffness}
         onReset={handleReset}
         onRetryCamera={handleRetry}
       />

@@ -1,22 +1,25 @@
 /**
- * Hand Tracking Hook using MediaPipe Hands
+ * Hand Tracking Hook using MediaPipe Hands — TWO-HAND support.
  *
- * Detects the following gestures from 21 hand landmarks:
- *  - indexTip (landmark 8) position for pointer control
- *  - pinch: thumb tip (4) close to index tip (8)
- *  - fist: all fingertips curled toward the palm
- *  - openPalm: all fingers extended away from the palm
+ * For each detected hand we expose:
+ *  - palm position (average of wrist + middle MCP) for attractor placement
+ *  - simple gesture: 'fist' (squeeze), 'open' (scatter/repel), or 'none' (gentle pull)
+ *
+ * Coordinates are normalized 0..1 with x mirrored for a selfie view.
  */
 
 import { useCallback, useRef, useState } from 'react';
 
-export type HandGesture = 'none' | 'pinch' | 'fist' | 'open';
+export type HandGesture = 'none' | 'fist' | 'open';
 
-export interface HandData {
-  /** Normalized coordinates (0-1), x is mirrored for selfie view */
-  indexTip: { x: number; y: number } | null;
-  isPinching: boolean;
+export interface SingleHand {
+  /** Normalized palm position, x mirrored for selfie view */
+  palm: { x: number; y: number };
   gesture: HandGesture;
+}
+
+export interface HandsData {
+  hands: SingleHand[];
 }
 
 export function useHandTracking() {
@@ -26,10 +29,11 @@ export function useHandTracking() {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const handLandmarkerRef = useRef<any>(null);
-  const handDataRef = useRef<HandData>({ indexTip: null, isPinching: false, gesture: 'none' });
+  const handsDataRef = useRef<HandsData>({ hands: [] });
   const lastVideoTimeRef = useRef(-1);
-  // Smoothed position for reducing jitter (exponential moving average)
-  const smoothedPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Smoothed palm positions, keyed by index in the result array (0 or 1)
+  const smoothed = useRef<Array<{ x: number; y: number } | null>>([null, null]);
   const SMOOTHING = 0.15;
 
   const [videoReady, setVideoReady] = useState(false);
@@ -38,7 +42,6 @@ export function useHandTracking() {
     setIsLoading(true);
     setCameraError(null);
 
-    // Release any previous stream/landmarker so the camera device is free
     if (videoRef.current?.srcObject) {
       (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
       videoRef.current.srcObject = null;
@@ -52,7 +55,6 @@ export function useHandTracking() {
 
     let stream: MediaStream | null = null;
     try {
-      // 1) Request camera FIRST while we still have the user-gesture context.
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
       });
@@ -65,7 +67,6 @@ export function useHandTracking() {
       await video.play();
       videoRef.current = video;
 
-      // 2) Now load MediaPipe (these awaits no longer affect getUserMedia).
       const { HandLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
 
       const vision = await FilesetResolver.forVisionTasks(
@@ -79,7 +80,7 @@ export function useHandTracking() {
           delegate: 'GPU',
         },
         runningMode: 'VIDEO',
-        numHands: 1,
+        numHands: 2,
         minHandDetectionConfidence: 0.6,
         minHandPresenceConfidence: 0.6,
         minTrackingConfidence: 0.6,
@@ -91,7 +92,6 @@ export function useHandTracking() {
       setIsTracking(true);
       setIsLoading(false);
     } catch (err: any) {
-      // Clean up any partial stream before reporting the error
       if (stream) stream.getTracks().forEach(t => t.stop());
       videoRef.current = null;
       setVideoReady(false);
@@ -118,15 +118,12 @@ export function useHandTracking() {
       handLandmarkerRef.current.close();
       handLandmarkerRef.current = null;
     }
-    handDataRef.current = { indexTip: null, isPinching: false, gesture: 'none' };
-    smoothedPos.current = null;
+    handsDataRef.current = { hands: [] };
+    smoothed.current = [null, null];
     lastVideoTimeRef.current = -1;
     setIsTracking(false);
   }, []);
 
-  /**
-   * Call this each animation frame to run hand detection.
-   */
   const detect = useCallback(() => {
     const video = videoRef.current;
     const detector = handLandmarkerRef.current;
@@ -137,64 +134,53 @@ export function useHandTracking() {
 
     try {
       const results = detector.detectForVideo(video, performance.now());
+      const landmarksList = results.landmarks ?? [];
 
-      if (results.landmarks && results.landmarks.length > 0) {
-        const lm = results.landmarks[0];
-        const indexTip = lm[8];
-        const thumbTip = lm[4];
+      const hands: SingleHand[] = [];
+
+      for (let h = 0; h < landmarksList.length && h < 2; h++) {
+        const lm = landmarksList[h];
         const wrist = lm[0];
+        const midMcp = lm[9];
 
-        // Pinch: thumb tip close to index tip
-        const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
-        const isPinching = pinchDist < 0.06;
+        // Palm = midpoint of wrist & middle MCP
+        const rawX = 1 - (wrist.x + midMcp.x) * 0.5; // mirror
+        const rawY = (wrist.y + midMcp.y) * 0.5;
 
-        // Fist / open-palm detection using fingertip-to-wrist distances
-        // Compare each fingertip distance to the middle-finger MCP (landmark 9) baseline
-        const palmSize = Math.hypot(lm[9].x - wrist.x, lm[9].y - wrist.y) || 0.0001;
-        const tipIdx = [8, 12, 16, 20]; // index, middle, ring, pinky tips
-        const pipIdx = [6, 10, 14, 18]; // corresponding PIP joints (middle knuckles)
+        const prev = smoothed.current[h];
+        if (prev) {
+          prev.x += (rawX - prev.x) * (1 - SMOOTHING);
+          prev.y += (rawY - prev.y) * (1 - SMOOTHING);
+        } else {
+          smoothed.current[h] = { x: rawX, y: rawY };
+        }
+        const palm = smoothed.current[h]!;
 
-        let extendedCount = 0;
-        let curledCount = 0;
+        // ── Gesture: fist vs open palm ──
+        const palmSize = Math.hypot(midMcp.x - wrist.x, midMcp.y - wrist.y) || 0.0001;
+        const tipIdx = [8, 12, 16, 20];
+        const pipIdx = [6, 10, 14, 18];
+        let extended = 0, curled = 0;
         for (let i = 0; i < tipIdx.length; i++) {
           const tip = lm[tipIdx[i]];
           const pip = lm[pipIdx[i]];
           const tipToWrist = Math.hypot(tip.x - wrist.x, tip.y - wrist.y) / palmSize;
           const pipToWrist = Math.hypot(pip.x - wrist.x, pip.y - wrist.y) / palmSize;
-          // Finger extended if tip is noticeably farther from wrist than its PIP
-          if (tipToWrist > pipToWrist + 0.15) extendedCount++;
-          // Finger curled if tip is closer to wrist than its PIP
-          if (tipToWrist < pipToWrist + 0.02) curledCount++;
+          if (tipToWrist > pipToWrist + 0.15) extended++;
+          if (tipToWrist < pipToWrist + 0.02) curled++;
         }
 
         let gesture: HandGesture = 'none';
-        if (isPinching) {
-          gesture = 'pinch';
-        } else if (curledCount >= 3 && extendedCount === 0) {
-          gesture = 'fist';
-        } else if (extendedCount >= 3) {
-          gesture = 'open';
-        }
+        if (curled >= 3 && extended === 0) gesture = 'fist';
+        else if (extended >= 3) gesture = 'open';
 
-        // Smooth pointer position
-        const rawX = 1 - indexTip.x; // mirror for selfie view
-        const rawY = indexTip.y;
-        if (smoothedPos.current) {
-          smoothedPos.current.x += (rawX - smoothedPos.current.x) * (1 - SMOOTHING);
-          smoothedPos.current.y += (rawY - smoothedPos.current.y) * (1 - SMOOTHING);
-        } else {
-          smoothedPos.current = { x: rawX, y: rawY };
-        }
-
-        handDataRef.current = {
-          indexTip: { x: smoothedPos.current.x, y: smoothedPos.current.y },
-          isPinching,
-          gesture,
-        };
-      } else {
-        handDataRef.current = { indexTip: null, isPinching: false, gesture: 'none' };
-        smoothedPos.current = null;
+        hands.push({ palm: { x: palm.x, y: palm.y }, gesture });
       }
+
+      // Reset smoothing slot for any hand that disappeared
+      for (let i = hands.length; i < 2; i++) smoothed.current[i] = null;
+
+      handsDataRef.current = { hands };
     } catch {
       // Occasional boundary failures — ignore
     }
@@ -204,7 +190,7 @@ export function useHandTracking() {
     isTracking,
     isLoading,
     cameraError,
-    handDataRef,
+    handsDataRef,
     videoRef,
     videoReady,
     startCamera,
