@@ -95,18 +95,18 @@ const Index = () => {
     const detected = handsDataRef.current.hands;
 
     const hands: Hand2D[] = detected.map(h => {
-      let strengthMult = 1;
-      let radiusMult = 1;
+      let strengthMult = 1.4;   // even idle palm tugs noticeably
+      let radiusMult = 1.1;
       let attract = true;
       switch (h.gesture) {
         case 'fist':
-          strengthMult = 2.5;
-          radiusMult = 0.65;
+          strengthMult = 3.2;
+          radiusMult = 0.7;
           attract = true;
           break;
         case 'open':
-          strengthMult = 1.6;
-          radiusMult = 1.4;
+          strengthMult = 2.2;
+          radiusMult = 1.5;
           attract = false;
           break;
       }
