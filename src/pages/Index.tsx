@@ -1,21 +1,21 @@
 /**
  * Main page: wires together the GPU particle system, hand tracking, and UI overlay.
  *
- * Animation loop flow:
- * 1. Run hand detection on the latest video frame
- * 2. Map detected hand coordinates to particle simulation world space
- * 3. Pass hand position as a uniform to the GPU compute shader
- * 4. GPU compute shader updates all 20k+ particle positions/velocities in parallel
- * 5. Render shader reads position texture and draws particles as glowing point sprites
+ * Gestures:
+ *  - Pointing: index finger tip drives the attraction point
+ *  - Pinch: strong focused pull (grab)
+ *  - Fist: strong attract + tight radius (squeeze / gather)
+ *  - Open palm: repel / scatter
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ParticleSystem } from '@/lib/particleSystem';
-import { useHandTracking } from '@/hooks/useHandTracking';
+import { useHandTracking, type HandGesture } from '@/hooks/useHandTracking';
 import UIOverlay from '@/components/UIOverlay';
 
 const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoElRef = useRef<HTMLVideoElement>(null);
   const particleRef = useRef<ParticleSystem | null>(null);
   const rafRef = useRef(0);
   const frameCountRef = useRef(0);
@@ -25,18 +25,31 @@ const Index = () => {
   const [attractMode, setAttractMode] = useState(true);
   const [forceStrength, setForceStrength] = useState(8.0);
   const [influenceRadius, setInfluenceRadius] = useState(4.0);
-  const [isPinching, setIsPinching] = useState(false);
+  const [gesture, setGesture] = useState<HandGesture>('none');
 
   const {
     isTracking,
     isLoading,
     cameraError,
     handDataRef,
+    videoRef,
+    videoReady,
     startCamera,
     stopCamera,
     detect,
     setCameraError,
   } = useHandTracking();
+
+  // Attach the MediaStream from the hook's hidden video to the visible <video> element
+  useEffect(() => {
+    const src = videoRef.current?.srcObject as MediaStream | null;
+    if (videoElRef.current && src) {
+      videoElRef.current.srcObject = src;
+      videoElRef.current.play().catch(() => {});
+    } else if (videoElRef.current && !src) {
+      videoElRef.current.srcObject = null;
+    }
+  }, [videoReady, videoRef]);
 
   // Store current values in refs for animation loop (avoids stale closures)
   const attractRef = useRef(attractMode);
@@ -54,7 +67,6 @@ const Index = () => {
     const ps = new ParticleSystem(canvas);
     particleRef.current = ps;
 
-    // Handle resize
     const onResize = () => {
       ps.resize(window.innerWidth, window.innerHeight);
     };
@@ -76,10 +88,8 @@ const Index = () => {
     const ps = particleRef.current;
     if (!ps) return;
 
-    // Run hand detection for this frame
     detect();
 
-    // Map hand coordinates to world space and pass to particle system
     const hand = handDataRef.current;
     if (hand.indexTip) {
       const bounds = ps.getWorldBounds();
@@ -87,23 +97,48 @@ const Index = () => {
       const worldY = (1 - hand.indexTip.y) * (bounds.top - bounds.bottom) + bounds.bottom;
       ps.setHandPosition(worldX, worldY, true);
 
-      // Pinch gesture multiplies force for a "grab" feel
-      const pinchMult = hand.isPinching ? 3.0 : 1.0;
-      ps.setForceStrength(forceRef.current * pinchMult);
-      setIsPinching(hand.isPinching);
+      // Map gesture → physics
+      // Base values come from sliders; gesture modulates them
+      let forceMult = 1.0;
+      let radiusMult = 1.0;
+      let attract = attractRef.current;
+
+      switch (hand.gesture) {
+        case 'pinch':
+          forceMult = 3.0;
+          radiusMult = 0.7;
+          attract = true;
+          break;
+        case 'fist':
+          // Squeeze — strong pull into a tight area
+          forceMult = 4.0;
+          radiusMult = 0.55;
+          attract = true;
+          break;
+        case 'open':
+          // Scatter — push particles away
+          forceMult = 2.2;
+          radiusMult = 1.4;
+          attract = false;
+          break;
+        default:
+          break;
+      }
+
+      ps.setForceStrength(forceRef.current * forceMult);
+      ps.setInfluenceRadius(radiusRef.current * radiusMult);
+      ps.setAttractMode(attract);
+      setGesture(hand.gesture);
     } else {
       ps.setHandPosition(999, 999, false);
       ps.setForceStrength(forceRef.current);
-      setIsPinching(false);
+      ps.setInfluenceRadius(radiusRef.current);
+      ps.setAttractMode(attractRef.current);
+      setGesture('none');
     }
 
-    ps.setAttractMode(attractRef.current);
-    ps.setInfluenceRadius(radiusRef.current);
-
-    // Update and render
     ps.update();
 
-    // FPS counter
     frameCountRef.current++;
     const now = performance.now();
     if (now - lastFpsTimeRef.current >= 1000) {
@@ -113,7 +148,6 @@ const Index = () => {
     }
   }, [detect, handDataRef]);
 
-  // Start animation loop
   useEffect(() => {
     rafRef.current = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(rafRef.current);
@@ -129,7 +163,30 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="relative w-full h-screen overflow-hidden">
+    <div className="relative w-full h-screen overflow-hidden bg-background">
+      {/* Webcam background — mirrored, dimmed for contrast */}
+      <video
+        ref={videoElRef}
+        autoPlay
+        playsInline
+        muted
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{
+          transform: 'scaleX(-1)',
+          opacity: videoReady ? 0.55 : 0,
+          filter: 'saturate(0.8) contrast(1.05)',
+          transition: 'opacity 400ms ease',
+        }}
+      />
+      {/* Dark vignette so particles stay readable */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse at center, hsl(var(--background) / 0.25) 0%, hsl(var(--background) / 0.75) 100%)',
+        }}
+      />
+
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
@@ -139,11 +196,11 @@ const Index = () => {
         isLoading={isLoading}
         cameraError={cameraError}
         fps={fps}
-        particleCount={particleRef.current?.particleCount ?? 20736}
+        particleCount={particleRef.current?.particleCount ?? 50176}
         attractMode={attractMode}
         forceStrength={forceStrength}
         influenceRadius={influenceRadius}
-        isPinching={isPinching}
+        gesture={gesture}
         onStartCamera={startCamera}
         onStopCamera={stopCamera}
         onToggleMode={setAttractMode}
