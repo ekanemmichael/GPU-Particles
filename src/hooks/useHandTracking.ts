@@ -38,7 +38,34 @@ export function useHandTracking() {
     setIsLoading(true);
     setCameraError(null);
 
+    // Release any previous stream/landmarker so the camera device is free
+    if (videoRef.current?.srcObject) {
+      (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+      videoRef.current.srcObject = null;
+    }
+    videoRef.current = null;
+    if (handLandmarkerRef.current) {
+      try { handLandmarkerRef.current.close(); } catch { /* noop */ }
+      handLandmarkerRef.current = null;
+    }
+    setVideoReady(false);
+
+    let stream: MediaStream | null = null;
     try {
+      // 1) Request camera FIRST while we still have the user-gesture context.
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      });
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      await video.play();
+      videoRef.current = video;
+
+      // 2) Now load MediaPipe (these awaits no longer affect getUserMedia).
       const { HandLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');
 
       const vision = await FilesetResolver.forVisionTasks(
@@ -60,29 +87,23 @@ export function useHandTracking() {
 
       handLandmarkerRef.current = handLandmarker;
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-      });
-
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.autoplay = true;
-      video.playsInline = true;
-      video.muted = true;
-      await video.play();
-
-      videoRef.current = video;
       setVideoReady(true);
       setIsTracking(true);
       setIsLoading(false);
     } catch (err: any) {
+      // Clean up any partial stream before reporting the error
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      videoRef.current = null;
+      setVideoReady(false);
       setIsLoading(false);
       if (err.name === 'NotAllowedError') {
         setCameraError('Camera permission denied. Please allow access and try again.');
       } else if (err.name === 'NotFoundError') {
         setCameraError('No camera found. Please connect a webcam.');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setCameraError('Camera is in use by another app or tab. Close it and try again.');
       } else {
-        setCameraError(`Camera error: ${err.message}`);
+        setCameraError(`Camera error: ${err.message ?? err.name ?? 'unknown'}`);
       }
     }
   }, []);
